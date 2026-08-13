@@ -168,6 +168,16 @@
                 </div>
                 <div class="field">
                   <div class="field-label">
+                    <label for="cfg-cf-token" id="lbl-cf-token">Cloudflare API Token（用量统计）</label>
+                    <button type="button" class="help-icon" id="help-cf-token">?</button>
+                  </div>
+                  <input id="cfg-cf-token" name="cfApiToken" type="password" autocomplete="off" />
+                  <small class="field-hint">
+                    <span id="cf-token-hint">用于查询当月 R2 A/B 类操作次数，仅本地保存不上传。</span>
+                  </small>
+                </div>
+                <div class="field">
+                  <div class="field-label">
                     <label for="cfg-bucket" id="lbl-bucket">存储桶名称（Bucket Name）</label>
                     <button type="button" class="help-icon" id="help-bucket">?</button>
                   </div>
@@ -872,6 +882,23 @@
             </button>
           </div>
 
+          <button type="button" class="btn secondary sm" id="usage-btn" data-tooltip="本月用量">
+            <svg
+              class="icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M3 3v18h18" />
+              <path d="M18 17V9" />
+              <path d="M13 17V5" />
+              <path d="M8 17v-4" />
+            </svg>
+            <span id="usage-btn-text">本月用量</span>
+          </button>
           <button type="button" class="btn secondary sm" id="new-folder-btn">
             <svg
               class="icon"
@@ -1516,6 +1543,68 @@
               <p class="share-qr-hint" id="share-qr-hint">扫码后在浏览器中打开链接</p>
             </div>
           </div>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- Usage Dialog -->
+    <dialog id="usage-dialog">
+      <div class="dialog-panel">
+        <div class="dialog-header">
+          <h2 id="usage-dialog-title">本月 R2 用量</h2>
+          <div class="dialog-header-actions">
+            <button type="button" class="icon-btn sm" id="usage-dialog-close" data-tooltip="关闭">
+              <svg
+                class="icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="dialog-body">
+          <p class="text-secondary" id="usage-dialog-subtitle">当月 A/B 类操作次数与免费额度对比</p>
+          <div id="usage-content">
+            <div class="usage-row">
+              <div class="usage-header">
+                <span class="usage-label" id="usage-class-a-label">A 类操作</span>
+                <span class="usage-numbers" id="usage-class-a-numbers">- / -</span>
+              </div>
+              <div class="usage-bar">
+                <div class="usage-fill" id="usage-class-a-fill" style="width: 0%"></div>
+              </div>
+              <small class="text-secondary" id="usage-class-a-hint">写、列、删除等操作</small>
+            </div>
+            <div class="usage-row">
+              <div class="usage-header">
+                <span class="usage-label" id="usage-class-b-label">B 类操作</span>
+                <span class="usage-numbers" id="usage-class-b-numbers">- / -</span>
+              </div>
+              <div class="usage-bar">
+                <div class="usage-fill" id="usage-class-b-fill" style="width: 0%"></div>
+              </div>
+              <small class="text-secondary" id="usage-class-b-hint">读、上传分片等操作</small>
+            </div>
+            <div class="usage-detail" id="usage-detail"></div>
+          </div>
+          <div class="usage-loading" id="usage-loading" hidden>
+            <svg class="icon spinning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            <span id="usage-loading-text">正在查询 Cloudflare 用量…</span>
+          </div>
+          <p class="field-error" id="usage-error" hidden></p>
+        </div>
+        <div class="dialog-footer">
+          <button type="button" class="btn secondary" id="usage-refresh-btn">重新查询</button>
+          <button type="button" class="btn primary" id="usage-ok-btn">好的</button>
         </div>
       </div>
     </dialog>

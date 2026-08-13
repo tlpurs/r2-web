@@ -133,6 +133,8 @@ class App {
     $('#lbl-account-id').textContent = t('accountId')
     $('#lbl-access-key').textContent = t('accessKeyId')
     $('#lbl-secret-key').textContent = t('secretAccessKey')
+    $('#lbl-cf-token').textContent = t('cfApiToken')
+    $('#cf-token-hint').textContent = t('tooltipCfApiToken')
     $('#lbl-bucket').textContent = t('bucketName')
     $('#lbl-custom-domain').textContent = t('customDomain')
     $('#lbl-bucket-access').textContent = t('bucketAccess')
@@ -192,6 +194,7 @@ class App {
     $('#help-account-id').dataset.tooltip = t('tooltipAccountId')
     $('#help-access-key').dataset.tooltip = t('tooltipAccessKeyId')
     $('#help-secret-key').dataset.tooltip = t('tooltipSecretAccessKey')
+    $('#help-cf-token').dataset.tooltip = t('tooltipCfApiToken')
     $('#help-bucket').dataset.tooltip = t('tooltipBucket')
     $('#help-custom-domain').dataset.tooltip = t('tooltipCustomDomain')
     $('#help-bucket-access').dataset.tooltip = t('tooltipBucketAccess')
@@ -244,6 +247,8 @@ class App {
     $('#share-btn').dataset.tooltip = t('shareConfig')
     $('#settings-btn').dataset.tooltip = t('settings')
     $('#logout-btn').dataset.tooltip = t('logout')
+    $('#usage-btn').dataset.tooltip = t('r2Usage')
+    $('#usage-btn-text').textContent = t('r2UsageQuery')
     $('#refresh-btn').dataset.tooltip = t('refresh')
     $('#preview-copy-text').dataset.tooltip = t('copyText')
     $('#preview-copy-image').dataset.tooltip = t('copyImage')
@@ -468,6 +473,7 @@ class App {
     const accountInput = /** @type {HTMLInputElement} */ ($('#cfg-account-id'))
     const accessInput = /** @type {HTMLInputElement} */ ($('#cfg-access-key'))
     const secretInput = /** @type {HTMLInputElement} */ ($('#cfg-secret-key'))
+    const cfTokenInput = /** @type {HTMLInputElement} */ ($('#cfg-cf-token'))
     const bucketInput = /** @type {HTMLInputElement} */ ($('#cfg-bucket'))
     const tplInput = /** @type {HTMLInputElement} */ ($('#cfg-filename-tpl'))
     const tplScopeInput = /** @type {HTMLSelectElement | null} */ ($('#cfg-filename-tpl-scope'))
@@ -490,6 +496,7 @@ class App {
     if (cfg.accountId) accountInput.value = cfg.accountId
     if (cfg.accessKeyId) accessInput.value = cfg.accessKeyId
     if (cfg.secretAccessKey) secretInput.value = cfg.secretAccessKey
+    if (cfg.cfApiToken) cfTokenInput.value = cfg.cfApiToken
     if (cfg.bucket) bucketInput.value = cfg.bucket
     if (cfg.filenameTpl) tplInput.value = cfg.filenameTpl
     if (tplScopeInput) tplScopeInput.value = cfg.filenameTplScope || 'images'
@@ -554,6 +561,7 @@ class App {
         accountId: accountInput.value.trim(),
         accessKeyId: accessInput.value.trim(),
         secretAccessKey: secretInput.value.trim(),
+        cfApiToken: cfTokenInput.value.trim(),
         bucket: bucketInput.value.trim(),
         filenameTpl: tplInput ? tplInput.value.trim() : '',
         filenameTplScope: tplScopeInput ? tplScopeInput.value : 'images',
@@ -848,6 +856,212 @@ class App {
         this.#enterBatchMode()
       }
     })
+
+    $('#usage-btn').addEventListener('click', () => this.#showUsageDialog())
+  }
+
+  /**
+   * 查询并显示当月 R2 A/B 类操作用量
+   */
+  async #showUsageDialog() {
+    const dialog = /** @type {HTMLDialogElement} */ ($('#usage-dialog'))
+    const content = $('#usage-content')
+    const loading = $('#usage-loading')
+    const errorEl = $('#usage-error')
+    const refreshBtn = $('#usage-refresh-btn')
+    const okBtn = $('#usage-ok-btn')
+    const closeBtn = $('#usage-dialog-close')
+
+    $('#usage-dialog-title').textContent = t('r2UsageTitle')
+    $('#usage-dialog-subtitle').textContent = t('r2UsageSubtitle')
+    $('#usage-class-a-label').textContent = t('r2UsageClassA')
+    $('#usage-class-b-label').textContent = t('r2UsageClassB')
+    $('#usage-class-a-hint').textContent = t('r2UsageClassAHint')
+    $('#usage-class-b-hint').textContent = t('r2UsageClassBHint')
+    $('#usage-loading-text').textContent = t('r2UsageLoading')
+    $('#usage-refresh-btn').textContent = t('r2UsageRefresh')
+    $('#usage-ok-btn').textContent = t('ok')
+    $('#usage-dialog-close').dataset.tooltip = t('close')
+
+    const cfg = this.#config.get()
+    content.hidden = true
+    loading.hidden = false
+    errorEl.hidden = true
+
+    const onClose = () => dialog.close()
+    const onRefresh = () => {
+      this.#queryUsage(dialog, content, loading, errorEl)
+    }
+
+    okBtn.onclick = onClose
+    closeBtn.onclick = onClose
+    refreshBtn.onclick = onRefresh
+
+    dialog.addEventListener('click', (e) => {
+      if (e.target === dialog) dialog.close()
+    })
+
+    dialog.showModal()
+    this.#ui.initTooltip()
+
+    await this.#queryUsage(dialog, content, loading, errorEl)
+  }
+
+  /**
+   * 查询 Cloudflare GraphQL 用量并渲染
+   * @param {HTMLDialogElement} dialog
+   * @param {HTMLElement} content
+   * @param {HTMLElement} loading
+   * @param {HTMLElement} errorEl
+   */
+  async #queryUsage(dialog, content, loading, errorEl) {
+    content.hidden = true
+    loading.hidden = false
+    errorEl.hidden = true
+
+    const cfg = this.#config.get()
+    if (!cfg.cfApiToken || !cfg.accountId) {
+      loading.hidden = true
+      errorEl.textContent = t('r2UsageNoToken')
+      errorEl.hidden = false
+      return
+    }
+
+    try {
+      const usage = await this.#fetchR2Usage(cfg.accountId, cfg.cfApiToken)
+      this.#renderUsage(content, usage)
+      content.hidden = false
+    } catch (/** @type {any} */ err) {
+      errorEl.textContent = t('r2UsageError', { msg: err.message || err })
+      errorEl.hidden = false
+    } finally {
+      loading.hidden = true
+    }
+  }
+
+  /**
+   * 调用 Cloudflare GraphQL Analytics API 获取当月 R2 操作次数
+   * @param {string} accountId
+   * @param {string} token
+   */
+  async #fetchR2Usage(accountId, token) {
+    const now = new Date()
+    const year = now.getUTCFullYear()
+    const month = now.getUTCMonth()
+    const start = new Date(Date.UTC(year, month, 1, 0, 0, 0)).toISOString()
+    const end = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59)).toISOString()
+
+    const query = `
+      query {
+        viewer {
+          accounts(filter: {accountTag: "${accountId}"}) {
+            r2OperationsAdaptiveGroups(
+              limit: 10000,
+              filter: {
+                datetime_geq: "${start}",
+                datetime_leq: "${end}"
+              }
+            ) {
+              dimensions {
+                actionType
+              }
+              sum {
+                requests
+              }
+            }
+          }
+        }
+      }
+    `.replace(/\s+/g, ' ')
+
+    const res = await fetch('https://api.cloudflare.com/client/v4/graphql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ query }),
+    })
+
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`
+      try {
+        const j = await res.json()
+        msg = j.errors?.[0]?.message || j.message || msg
+      } catch {
+        /* ignore */
+      }
+      throw new Error(msg)
+    }
+
+    const json = await res.json()
+    if (json.errors?.length) {
+      throw new Error(json.errors[0].message || 'GraphQL error')
+    }
+
+    const groups = json.data?.viewer?.accounts?.[0]?.r2OperationsAdaptiveGroups || []
+
+    const CLASS_A = new Set([
+      'PutObject',
+      'CopyObject',
+      'CompleteMultipartUpload',
+      'ListObjectsV2',
+      'ListObjects',
+      'ListMultipartUploads',
+      'CreateBucket',
+      'DeleteBucket',
+      'PutBucketEncryption',
+      'PutBucketCors',
+      'PutBucketLifecycleConfiguration',
+      'PutBucketPolicy',
+      'AbortMultipartUpload',
+      'DeleteObject',
+      'DeleteObjects',
+    ])
+    const CLASS_B = new Set(['GetObject', 'HeadObject', 'UploadPart', 'UploadPartCopy'])
+
+    let classA = 0
+    let classB = 0
+    const unknown = []
+
+    for (const g of groups) {
+      const action = g.dimensions?.actionType
+      const count = g.sum?.requests || 0
+      if (CLASS_A.has(action)) classA += count
+      else if (CLASS_B.has(action)) classB += count
+      else unknown.push({ action, count })
+    }
+
+    // 如果 Cloudflare 的 actionType 命名与预期不同，但接口没返回分类，按 B 兜底提示
+    return { classA, classB, unknown: unknown.slice(0, 10) }
+  }
+
+  /**
+   * 渲染用量弹窗
+   * @param {HTMLElement} content
+   * @param {{classA: number, classB: number, unknown: {action: string, count: number}[]}} usage
+   */
+  #renderUsage(content, usage) {
+    const CLASS_A_FREE = 1_000_000
+    const CLASS_B_FREE = 10_000_000
+
+    $('#usage-class-a-numbers').textContent = t('r2UsageQuota', {
+      used: usage.classA.toLocaleString(),
+      free: CLASS_A_FREE.toLocaleString(),
+    })
+    $('#usage-class-b-numbers').textContent = t('r2UsageQuota', {
+      used: usage.classB.toLocaleString(),
+      free: CLASS_B_FREE.toLocaleString(),
+    })
+
+    const pctA = Math.min(100, Math.round((usage.classA / CLASS_A_FREE) * 100))
+    const pctB = Math.min(100, Math.round((usage.classB / CLASS_B_FREE) * 100))
+    $('#usage-class-a-fill').style.width = `${pctA}%`
+    $('#usage-class-b-fill').style.width = `${pctB}%`
+
+    const detail = $('#usage-detail')
+    detail.textContent = t('r2UsageDetail')
+    detail.hidden = false
   }
 }
 

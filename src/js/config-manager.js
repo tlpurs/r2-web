@@ -1,6 +1,6 @@
 import { STORAGE_KEY, THEME_KEY, LANG_KEY, VIEW_KEY, DENSITY_KEY, SORT_BY_KEY, SORT_ORDER_KEY } from './constants.js'
 
-/** @typedef {{ accountId?: string; accessKeyId?: string; secretAccessKey?: string; bucket?: string; filenameTpl?: string; filenameTplScope?: string; customDomain?: string; bucketAccess?: 'public' | 'private'; compressMode?: string; compressLevel?: string; tinifyKey?: string; uploadConcurrency?: number }} AppConfig */
+/** @typedef {{ accountId?: string; accessKeyId?: string; secretAccessKey?: string; cfApiToken?: string; bucket?: string; filenameTpl?: string; filenameTplScope?: string; customDomain?: string; bucketAccess?: 'public' | 'private'; compressMode?: string; compressLevel?: string; tinifyKey?: string; uploadConcurrency?: number }} AppConfig */
 /** @typedef {AppConfig & { theme?: string; lang?: string; view?: string; density?: string; sortBy?: string; sortOrder?: string }} SharePayload */
 
 class ConfigManager {
