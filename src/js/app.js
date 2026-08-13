@@ -1090,8 +1090,8 @@ class App {
     $('#usage-class-a-fill').style.width = `${pctA}%`
     $('#usage-class-b-fill').style.width = `${pctB}%`
 
-    const usedStorage = filesize(usage.storageBytes || 0, { exponent: 3, round: 2 })
-    const freeStorage = filesize(STORAGE_FREE, { exponent: 3, round: 0 })
+    const usedStorage = filesize(usage.storageBytes || 0, { base: 2, exponent: 3, round: 2 })
+    const freeStorage = filesize(STORAGE_FREE, { base: 2, exponent: 3, round: 0 })
     $('#usage-storage-numbers').textContent = t('r2UsageStorageQuota', {
       used: usedStorage,
       free: freeStorage,
