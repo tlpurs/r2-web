@@ -18,6 +18,7 @@ import { UIManager } from './ui-manager.js'
 import { getCurrentLang, setLang, t } from './i18n.js'
 import { $, getErrorMessage } from './utils.js'
 import dayjs from 'dayjs'
+import { filesize } from 'filesize'
 
 /** @typedef {'zh'|'en'|'ja'} Lang */
 
@@ -878,6 +879,8 @@ class App {
     $('#usage-class-b-label').textContent = t('r2UsageClassB')
     $('#usage-class-a-hint').textContent = t('r2UsageClassAHint')
     $('#usage-class-b-hint').textContent = t('r2UsageClassBHint')
+    $('#usage-storage-label').textContent = t('r2UsageStorage')
+    $('#usage-storage-hint').textContent = t('r2UsageStorageHint')
     $('#usage-loading-text').textContent = t('r2UsageLoading')
     $('#usage-refresh-btn').textContent = t('r2UsageRefresh')
     $('#usage-ok-btn').textContent = t('ok')
@@ -955,7 +958,7 @@ class App {
       query {
         viewer {
           accounts(filter: {accountTag: "${accountId}"}) {
-            r2OperationsAdaptiveGroups(
+            operations: r2OperationsAdaptiveGroups(
               limit: 10000,
               filter: {
                 datetime_geq: "${start}",
@@ -967,6 +970,22 @@ class App {
               }
               sum {
                 requests
+              }
+            }
+            storage: r2StorageAdaptiveGroups(
+              limit: 10000,
+              filter: {
+                datetime_geq: "${start}",
+                datetime_leq: "${end}"
+              }
+              orderBy: [datetime_DESC]
+            ) {
+              max {
+                payloadSize
+                objectCount
+              }
+              dimensions {
+                datetime
               }
             }
           }
@@ -1003,7 +1022,14 @@ class App {
       throw new Error(json.errors[0].message || 'GraphQL error')
     }
 
-    const groups = json.data?.viewer?.accounts?.[0]?.r2OperationsAdaptiveGroups || []
+    const accounts = json.data?.viewer?.accounts?.[0]
+    const groups = accounts?.operations || []
+
+    // 存储量：取最新 datetime 的 max.payloadSize（字节）
+    const storageGroups = accounts?.storage || []
+    const latestStorage = storageGroups[0] || {}
+    const storageBytes = Number(latestStorage.max?.payloadSize || 0)
+    const objectCount = Number(latestStorage.max?.objectCount || 0)
 
     const CLASS_A = new Set([
       'PutObject',
@@ -1037,17 +1063,18 @@ class App {
     }
 
     // 如果 Cloudflare 的 actionType 命名与预期不同，但接口没返回分类，按 B 兜底提示
-    return { classA, classB, unknown: unknown.slice(0, 10) }
+    return { classA, classB, unknown: unknown.slice(0, 10), storageBytes, objectCount }
   }
 
   /**
    * 渲染用量弹窗
    * @param {HTMLElement} content
-   * @param {{classA: number, classB: number, unknown: {action: string, count: number}[]}} usage
+   * @param {{classA: number, classB: number, unknown: {action: string, count: number}[], storageBytes: number, objectCount: number}} usage
    */
   #renderUsage(content, usage) {
     const CLASS_A_FREE = 1_000_000
     const CLASS_B_FREE = 10_000_000
+    const STORAGE_FREE = 10 * 1024 * 1024 * 1024
 
     $('#usage-class-a-numbers').textContent = t('r2UsageQuota', {
       used: usage.classA.toLocaleString(),
@@ -1063,8 +1090,21 @@ class App {
     $('#usage-class-a-fill').style.width = `${pctA}%`
     $('#usage-class-b-fill').style.width = `${pctB}%`
 
+    const usedStorage = filesize(usage.storageBytes || 0, { exponent: 3, round: 2 })
+    const freeStorage = filesize(STORAGE_FREE, { exponent: 3, round: 0 })
+    $('#usage-storage-numbers').textContent = t('r2UsageStorageQuota', {
+      used: usedStorage,
+      free: freeStorage,
+    })
+    const pctS = Math.min(100, Math.round(((usage.storageBytes || 0) / STORAGE_FREE) * 100))
+    const storageFill = $('#usage-storage-fill')
+    storageFill.style.width = `${pctS}%`
+    storageFill.classList.toggle('warning', pctS >= 80 && pctS < 100)
+    storageFill.classList.toggle('danger', pctS >= 100)
+
     const detail = $('#usage-detail')
-    detail.textContent = t('r2UsageDetail')
+    const objText = usage.objectCount ? ` 对象数：${usage.objectCount.toLocaleString()}` : ''
+    detail.textContent = t('r2UsageDetail') + objText
     detail.hidden = false
   }
 }

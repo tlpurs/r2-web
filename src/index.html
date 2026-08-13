@@ -1570,7 +1570,7 @@
           </div>
         </div>
         <div class="dialog-body">
-          <p class="text-secondary" id="usage-dialog-subtitle">当月 A/B 类操作次数与免费额度对比</p>
+          <p class="text-secondary" id="usage-dialog-subtitle">当月 A/B 类操作次数、存储空间与免费额度对比</p>
           <div id="usage-content">
             <div class="usage-row">
               <div class="usage-header">
@@ -1591,6 +1591,16 @@
                 <div class="usage-fill" id="usage-class-b-fill" style="width: 0%"></div>
               </div>
               <small class="text-secondary" id="usage-class-b-hint">读、上传分片等操作</small>
+            </div>
+            <div class="usage-row">
+              <div class="usage-header">
+                <span class="usage-label" id="usage-storage-label">存储空间</span>
+                <span class="usage-numbers" id="usage-storage-numbers">- / -</span>
+              </div>
+              <div class="usage-bar">
+                <div class="usage-fill" id="usage-storage-fill" style="width: 0%"></div>
+              </div>
+              <small class="text-secondary" id="usage-storage-hint">对象占用的总存储量</small>
             </div>
             <div class="usage-detail" id="usage-detail"></div>
           </div>
