@@ -974,11 +974,15 @@ class App {
       }
     `.replace(/\s+/g, ' ')
 
-    const res = await fetch('https://api.cloudflare.com/client/v4/graphql', {
+    // Cloudflare GraphQL API 不支持浏览器 CORS，纯前端直连被拦；
+    // 经本站后端 cfproxy 中转（X-CF-Token 头 + path 查询参数）。
+    const CF_PROXY_BASE = 'https://api.oc.5666.online/api/cf-proxy'
+    const proxyUrl = `${CF_PROXY_BASE}?path=${encodeURIComponent('/client/v4/graphql')}`
+    const res = await fetch(proxyUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        'X-CF-Token': token,
       },
       body: JSON.stringify({ query }),
     })
@@ -987,7 +991,7 @@ class App {
       let msg = `HTTP ${res.status}`
       try {
         const j = await res.json()
-        msg = j.errors?.[0]?.message || j.message || msg
+        msg = j.errors?.[0]?.message || j.error || j.message || msg
       } catch {
         /* ignore */
       }
